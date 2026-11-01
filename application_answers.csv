@@ -1,0 +1,23 @@
+question_text,answer,field_type,created_at,source,options
+Are you currently residing in Bengaluru or willing to relocate to Bengaluru?,Yes,radio,2026-11-01T10:44:35,llm,Yes | No | Skip this question
+How many years of experience do you have in Natural Language Processing?,2 years,text,2026-11-01T10:49:18,llm,
+How many years of experience do you have in Deep Learning?,2,text,2026-11-01T10:49:21,rule,
+Are you currently living in or ready to relocate to Hyderabad ?,Yes,radio,2026-11-01T10:49:48,llm,Yes | No
+How many years of experience do you have as Ai ML Engineer ?,2,radio,2026-11-01T10:49:51,rule,No experience | 0-1 years | 1-2 years | >2 years
+How many years of experience do you have in Ai Algorithms ?,2,radio,2026-11-01T10:49:53,rule,No experience | 0-1 years | 1-2 years | >2 years
+what is your last working day?,"December 1, 2026 (30 days notice period)",text,2026-11-01T10:50:58,llm,
+Are you available for f2f interview?,Yes,text,2026-11-01T10:51:16,llm,
+Are you currently residing in Hyderabad or willing to relocate to Hyderabad?,Yes,radio,2026-11-01T10:51:34,llm,Yes | No | Skip this question
+How many years of experience do you have in AgentOps?,2,text,2026-11-01T10:52:12,saved,
+Which agent orchestration frameworks have you worked with?,MCP (Model Context Protocol) for building enterprise agentic AI platforms with 10+ tool integrations and multi-step workflow automation; workflow orchestration for Python-based automation pipelines.,text,2026-11-01T10:52:33,llm,
+Are you comfortable with a role that is approximately 50% development and 50% Agentic AI productionization/observability?,Yes,text,2026-11-01T10:52:52,llm,
+How many years of experience do you have in Devops Ci Cd?,2,text,2026-11-01T10:53:26,saved,
+How many years of experience do you have in Aws Cloud Services?,2,text,2026-11-01T10:53:28,rule,
+How many years of experience do you have in MLOps Pipeline deployment?,0,text,2026-11-01T10:53:53,llm,
+When is your last working day,"December 1, 2026 (30 days notice period)",text,2026-11-01T10:58:35,saved,
+How many years of experience do you have in azure?,2,text,2026-11-01T10:58:38,saved,
+Are you available for Face to Face interview in Hyderabad or Bangalore location on 31/10/2026,Hyderabad,text,2026-11-01T10:58:40,rule,
+Do you have PF for all the companies you worked for,"Yes, I have PF accounts with all the companies I worked for.",text,2026-11-01T10:59:00,llm,
+How many years of experience do you have in Ml Model Deployment?,0,text,2026-11-01T10:59:26,saved,
+How many years of experience do you have in MLflow?,2,text,2026-11-01T10:59:29,saved,
+How many years of experience do you have in Kubernetes?,2,text,2026-11-01T10:59:31,saved,
