@@ -28,13 +28,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from bs4 import BeautifulSoup
 from answer_bot import quick_apply
-
-# Try to use webdriver-manager for automatic driver management
-try:
-    from webdriver_manager.microsoft import EdgeChromiumDriverManager
-    WEBDRIVER_MANAGER_AVAILABLE = True
-except ImportError:
-    WEBDRIVER_MANAGER_AVAILABLE = False
+from browser import create_edge_driver, login_naukri
 
 # ------------------------------------------------------------
 # Configuration
@@ -56,9 +50,6 @@ LOCATION = os.getenv('LOCATION', '').strip()
 # --- Limits ---
 MAX_APPLICATIONS = int(os.getenv('MAX_APPLICATIONS', '50'))
 PAGES_PER_KEYWORD = int(os.getenv('PAGES_PER_KEYWORD', '2'))
-
-# --- Edge Driver Path (optional, only if NOT using webdriver-manager) ---
-EDGE_DRIVER_PATH = os.getenv('EDGE_DRIVER_PATH', '')
 
 # ------------------------------------------------------------
 # Logging Setup
@@ -90,57 +81,6 @@ def validate_config():
         logger.error("Please copy .env.example to .env and fill in your details.")
         return False
     return True
-
-
-def create_edge_driver():
-    """Create and return an Edge WebDriver instance."""
-    options = webdriver.EdgeOptions()
-    options.add_argument("--start-maximized")
-    options.add_argument("--disable-notifications")
-    # Uncomment the line below to run in headless mode (no visible browser)
-    # options.add_argument("--headless=new")
-
-    service = None
-    if EDGE_DRIVER_PATH:
-        logger.info(f"Using EdgeDriver at: {EDGE_DRIVER_PATH}")
-        service = EdgeService(executable_path=EDGE_DRIVER_PATH)
-    elif WEBDRIVER_MANAGER_AVAILABLE:
-        try:
-            logger.info("Using webdriver-manager to auto-download EdgeDriver...")
-            service = EdgeService(EdgeChromiumDriverManager().install())
-        except Exception as e:
-            # Typically a corporate proxy with SSL interception or no network
-            logger.warning(f"webdriver-manager failed ({e}); falling back to Selenium Manager / PATH")
-
-    if service is None:
-        logger.info("Using Selenium Manager / EdgeDriver from PATH...")
-        service = EdgeService()
-
-    driver = webdriver.Edge(service=service, options=options)
-    return driver
-
-
-def login_naukri(driver):
-    """Log in to Naukri.com."""
-    logger.info("Logging in to Naukri.com...")
-    driver.get('https://login.naukri.com/')
-    time.sleep(3)
-
-    # Wait for username field
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, 'usernameField'))
-    )
-
-    uname = driver.find_element(By.ID, 'usernameField')
-    uname.send_keys(NAUKRI_EMAIL)
-
-    passwd = driver.find_element(By.ID, 'passwordField')
-    passwd.send_keys(NAUKRI_PASSWORD)
-    passwd.send_keys(Keys.ENTER)
-
-    # Wait for login to complete
-    time.sleep(8)
-    logger.info("Login completed.")
 
 
 def build_search_urls():

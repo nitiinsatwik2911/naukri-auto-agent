@@ -34,12 +34,7 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException, StaleElementReferenceException
-
-try:
-    from webdriver_manager.microsoft import EdgeChromiumDriverManager
-    WEBDRIVER_MANAGER_AVAILABLE = True
-except ImportError:
-    WEBDRIVER_MANAGER_AVAILABLE = False
+from browser import create_edge_driver, login_naukri
 
 # ------------------------------------------------------------
 # Configuration
@@ -155,45 +150,6 @@ def save_answer(question_text, answer, field_type="text"):
         logger.info(f"💾 Saved: '{question_text}' → '{answer}'")
     except Exception as e:
         logger.error(f"Could not save to {ANSWERS_CSV}: {e}")
-
-
-# ============================================================
-# Browser Setup
-# ============================================================
-
-def create_edge_driver():
-    """Create and return an Edge WebDriver instance."""
-    options = webdriver.EdgeOptions()
-    options.add_argument("--start-maximized")
-    options.add_argument("--disable-notifications")
-
-    if WEBDRIVER_MANAGER_AVAILABLE:
-        logger.info("Using webdriver-manager to auto-download EdgeDriver...")
-        service = EdgeService(EdgeChromiumDriverManager().install())
-    else:
-        service = EdgeService()
-
-    driver = webdriver.Edge(service=service, options=options)
-    return driver
-
-
-def login_naukri(driver):
-    """Log in to Naukri.com."""
-    logger.info("Logging in to Naukri.com...")
-    driver.get('https://login.naukri.com/')
-    time.sleep(3)
-
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, 'usernameField'))
-    )
-
-    driver.find_element(By.ID, 'usernameField').send_keys(NAUKRI_EMAIL)
-    passwd = driver.find_element(By.ID, 'passwordField')
-    passwd.send_keys(NAUKRI_PASSWORD)
-    passwd.send_keys(Keys.ENTER)
-
-    time.sleep(8)
-    logger.info("Login completed.")
 
 
 # ============================================================

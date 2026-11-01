@@ -19,10 +19,13 @@ import tempfile
 import time
 from datetime import datetime
 
+from dotenv import load_dotenv
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
+
+load_dotenv()  # PROFILE is built at import time, so .env must be loaded first
 
 logger = logging.getLogger(__name__)
 
@@ -62,20 +65,20 @@ SKILL_YEARS = {
 
 def build_profile():
     return {
-        "full_name": "Nitin Satwik Kandula",
-        "first_name": _env("FIRSTNAME", "Nitin Satwik"),
-        "last_name": _env("LASTNAME", "Kandula"),
-        "email": "nitiinsatwik2911@gmail.com",
-        "phone": "6303097241",
-        "city": "Hyderabad",
-        "linkedin": "https://linkedin.com/in/nitin2911",
+        "full_name": _env("FULL_NAME"),
+        "first_name": _env("FIRSTNAME"),
+        "last_name": _env("LASTNAME"),
+        "email": _env("PROFILE_EMAIL"),
+        "phone": _env("PROFILE_PHONE"),
+        "city": _env("PROFILE_CITY"),
+        "linkedin": _env("PROFILE_LINKEDIN"),
         "total_experience": _env("TOTAL_EXPERIENCE", "4"),
-        "current_company": "Qualcomm Technologies, Inc.",
-        "designation": "AI Engineer",
-        "degree": "B.Tech",
-        "branch": "Electrical Engineering",
-        "college": "National Institute of Technology Andhra Pradesh",
-        "cgpa": "8.5",
+        "current_company": _env("PROFILE_COMPANY"),
+        "designation": _env("PROFILE_DESIGNATION"),
+        "degree": _env("PROFILE_DEGREE"),
+        "branch": _env("PROFILE_BRANCH"),
+        "college": _env("PROFILE_COLLEGE"),
+        "cgpa": _env("PROFILE_CGPA"),
         # Not on resume -> must come from .env, otherwise unanswered
         "current_ctc": _env("CURRENT_CTC"),
         "expected_ctc": _env("EXPECTED_CTC"),

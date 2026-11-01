@@ -122,14 +122,18 @@ The bot has been updated to work with Naukri.com's 2026 redesign. Key changes:
 ## 📁 Project Structure
 
 ```
-Naukri-autoapply-bot/
-├── .env.example          # Example environment configuration (copy to .env)
-├── .gitignore            # Files to exclude from git
-├── requirements.txt      # Python dependencies
-├── README.md             # This file
-├── Naukri-Edge.py        # Main bot script for Microsoft Edge browser
-├── Naukri autoapply jobs.ipynb  # Jupyter Notebook version (legacy)
-└── naukriapplied.csv     # Output: applied/failed job links (auto-generated)
+naukri-auto-agent/
+├── .env.example               # Example configuration (copy to .env)
+├── requirements.txt
+├── browser.py                 # Shared: Edge driver setup + Naukri login
+├── answer_bot.py              # Quick-apply + screening-question answering (saved -> rules -> LLM)
+├── Naukri-Edge.py             # Mode 1: keyword search, multi-tab, quick apply
+├── Naukri-Recommended.py      # Mode 2: recommended-jobs page + chatbot drawer
+├── resume.txt                 # Resume facts used by the LLM fallback
+├── application_answers.csv    # Learned Q&A (auto-generated, editable, gitignored)
+├── naukriapplied.csv          # Output: applied/failed links (gitignored)
+├── SYSTEM_DESIGN.md           # Architecture and target structure
+└── Naukri autoapply jobs.ipynb  # Legacy notebook
 ```
 
 ## 🔧 Troubleshooting

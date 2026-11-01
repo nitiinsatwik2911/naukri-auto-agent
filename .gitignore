@@ -33,5 +33,9 @@ venv/
 env/
 .venv/
 
-application_answers.csvdrivers/
+
+# Local data / binaries
+application_answers.csv
+drivers/
 debug_pages/
+naukri_venv/
