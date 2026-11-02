@@ -129,7 +129,7 @@ quick_apply(link)
 6. **README is out of date.** It says `webdriver-manager` auto-downloads the driver, but a local `drivers/msedgedriver.exe` exists. It also omits `answer_bot.py` and the Recommended bot.
 7. **Learned answers are never expired:** a wrong LLM answer is reused forever until manually edited.
 
-## 9. Proposed Target Structure
+## 9. Project Structure (implemented)
 
 ```
 naukri-auto-agent/
@@ -139,11 +139,11 @@ naukri-auto-agent/
 ├── .env.example
 ├── .gitignore                 # fixed: one entry per line, add naukri_venv/
 ├── config/
-│   ├── profile.example.yaml   # name, email, phone, education, SKILL_YEARS
-│   └── resume.txt             # (gitignored; example provided)
+│   ├── resume.example.txt     # example; copy to resume.txt (gitignored)
+│   └── resume.txt
 ├── src/naukri_agent/
 │   ├── __init__.py
-│   ├── config.py              # load .env + profile, validation
+│   ├── config.py              # only reader of .env; profile + SKILL_YEARS (no profile.yaml: everything lives in .env)
 │   ├── browser.py             # create_edge_driver, login, waits, tab helpers
 │   ├── search.py              # build_search_urls, collect_job_links (keyword mode)
 │   ├── recommended.py         # recommended-feed mode
@@ -155,11 +155,12 @@ naukri-auto-agent/
 │   │   ├── resolver.py        # find_answer: saved → rule → llm
 │   │   └── options.py         # match_option, range matching
 │   ├── chatbot.py             # DOM handlers: radio, select, contenteditable, save
-│   └── results.py             # applied/failed log (+ cross-run dedupe)
+│   └── results.py             # applied/failed log + job_history.csv (cross-run dedupe)
 ├── cli.py                     # `python cli.py search|recommended`
 ├── data/                      # gitignored runtime output
 │   ├── application_answers.csv
 │   ├── naukriapplied.csv
+│   ├── job_history.csv
 │   └── debug_pages/
 ├── drivers/                   # gitignored (or rely on Selenium Manager)
 └── tests/
@@ -168,13 +169,11 @@ naukri-auto-agent/
     └── test_resolver.py
 ```
 
+**Known gap:** `recommended.py` still has its own chatbot handlers and CSV reader (moved as-is, not merged into `chatbot.py` / `answers/`), because merging changes its matching behaviour and can only be validated against the live site.
+
 **Why this split:** everything that doesn't need a browser (rules, option matching, resolver, store) becomes unit-testable. Only `browser.py`, `chatbot.py` and `search.py` touch Selenium, so a Naukri DOM change is confined to those files.
 
-## 10. Recommended Next Steps (in order)
+## 10. Status of Recommended Steps
 
-1. Fix `.gitignore` and untrack anything sensitive. Check git history for committed PII.
-2. Move the hardcoded profile into `.env` or a gitignored `profile.yaml`.
-3. Extract the shared answer store, driver and login into modules and make `Naukri-Recommended.py` reuse them.
-4. Add cross-run dedupe from `naukriapplied.csv`.
-5. Add unit tests for `rule_answer`, `match_option` and `find_answer`.
-6. Refresh the README to match the real structure.
+Done: `.gitignore` fixed; profile, skill years and every tunable moved to `.env` (read only by `config.py`); shared browser/login module; cross-run dedupe; `data/` folder; package split; unit tests for rules, options and resolver; README refreshed.
+Open: merge `recommended.py` onto `chatbot.py` / `answers/`; purge secrets from git history; expire stale LLM answers.

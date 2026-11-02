@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-from dotenv import load_dotenv
+from . import config
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -17,20 +17,24 @@ try:
 except ImportError:
     WEBDRIVER_MANAGER_AVAILABLE = False
 
-load_dotenv()
-
 logger = logging.getLogger(__name__)
 
-NAUKRI_EMAIL = os.getenv('NAUKRI_EMAIL', '')
-NAUKRI_PASSWORD = os.getenv('NAUKRI_PASSWORD', '')
-EDGE_DRIVER_PATH = os.getenv('EDGE_DRIVER_PATH', '')
+NAUKRI_EMAIL = config.get('NAUKRI_EMAIL')
+NAUKRI_PASSWORD = config.get('NAUKRI_PASSWORD')
+EDGE_DRIVER_PATH = config.get('EDGE_DRIVER_PATH')
 
 
-def create_edge_driver():
-    """Create and return an Edge WebDriver instance."""
+def create_edge_driver(capture_network=False):
+    """Create and return an Edge WebDriver instance.
+
+    capture_network=True records network requests (driver.get_log("performance")).
+    """
     options = webdriver.EdgeOptions()
     options.add_argument("--start-maximized")
     options.add_argument("--disable-notifications")
+    if capture_network:
+        options.set_capability("ms:loggingPrefs", {"performance": "ALL"})
+        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     # Uncomment the line below to run in headless mode (no visible browser)
     # options.add_argument("--headless=new")
 
@@ -50,7 +54,10 @@ def create_edge_driver():
         logger.info("Using Selenium Manager / EdgeDriver from PATH...")
         service = EdgeService()
 
-    return webdriver.Edge(service=service, options=options)
+    driver = webdriver.Edge(service=service, options=options)
+    if capture_network:
+        driver.execute_cdp_cmd("Network.enable", {})
+    return driver
 
 
 def login_naukri(driver):

@@ -39,3 +39,8 @@ application_answers.csv
 drivers/
 debug_pages/
 naukri_venv/
+job_history.csv
+
+data/
+
+config/resume.txt

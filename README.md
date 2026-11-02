@@ -96,7 +96,7 @@ MAX_APPLICATIONS=50
 ### 4. Run the bot
 
 ```bash
-python Naukri-Edge.py
+python cli.py search
 ```
 
 > **Note:** The script uses `webdriver-manager` to automatically download the correct EdgeDriver. No manual driver setup needed!
@@ -123,16 +123,37 @@ The bot has been updated to work with Naukri.com's 2026 redesign. Key changes:
 
 ```
 naukri-auto-agent/
-├── .env.example               # Example configuration (copy to .env)
+├── cli.py                     # python cli.py search | filter | recommended
 ├── requirements.txt
-├── browser.py                 # Shared: Edge driver setup + Naukri login
-├── answer_bot.py              # Quick-apply + screening-question answering (saved -> rules -> LLM)
-├── Naukri-Edge.py             # Mode 1: keyword search, multi-tab, quick apply
-├── Naukri-Recommended.py      # Mode 2: recommended-jobs page + chatbot drawer
-├── resume.txt                 # Resume facts used by the LLM fallback
-├── application_answers.csv    # Learned Q&A (auto-generated, editable, gitignored)
-├── naukriapplied.csv          # Output: applied/failed links (gitignored)
-├── SYSTEM_DESIGN.md           # Architecture and target structure
+├── pytest.ini
+├── .env.example               # All settings, with example values (copy to .env)
+├── SYSTEM_DESIGN.md           # Architecture
+├── config/
+│   ├── resume.example.txt     # Copy to config/resume.txt (gitignored)
+│   └── resume.txt             # Resume facts used by the LLM fallback
+├── src/naukri_agent/
+│   ├── config.py              # Only place that reads .env (+ profile, skill years)
+│   ├── browser.py             # Edge driver setup + Naukri login
+│   ├── search.py              # Keyword + filter modes: tabs, link collection, run()
+│   ├── filters.py             # FILTER_URL cleanup + search-API helpers (pure, tested)
+│   ├── jobapi.py              # Filter mode: replays the page's search API call after login
+│   ├── recommended.py         # Recommended-feed mode
+│   ├── apply.py               # quick_apply + per-run apply loop
+│   ├── chatbot.py             # Screening-question DOM handling (Selenium)
+│   ├── results.py             # naukriapplied.csv + job_history.csv (skip settled jobs)
+│   └── answers/               # No browser needed (unit-tested)
+│       ├── store.py           # application_answers.csv
+│       ├── rules.py           # Profile-based rules
+│       ├── llm.py             # claude CLI fallback
+│       ├── options.py         # Match answers to radio/select options
+│       └── resolver.py        # saved -> rule -> llm
+├── tests/                     # test_rules, test_options, test_resolver
+├── data/                      # Generated files (gitignored, folder set by DATA_DIR)
+│   ├── application_answers.csv
+│   ├── naukriapplied.csv
+│   ├── job_history.csv
+│   └── debug_pages/
+├── drivers/                   # Optional local msedgedriver (gitignored)
 └── Naukri autoapply jobs.ipynb  # Legacy notebook
 ```
 

@@ -1,75 +1,39 @@
-"""
-Naukri Auto-Apply Bot - Microsoft Edge Version (Updated for Naukri.com 2026)
-================================================================================
-Automates job applications on Naukri.com using Selenium with Edge browser.
-Opens each job keyword search in a separate tab for faster collection.
-
-Usage:
-    1. Copy .env.example to .env and fill in your details
-    2. pip install -r requirements.txt
-    3. python Naukri-Edge.py
-
-Requirements:
-    - Edge browser installed
-    - Dependencies from requirements.txt
-"""
-
-import os
-import time
+"""Keyword-search mode: open one tab per keyword/page, collect job links, then apply."""
 import logging
-import pandas as pd
-from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.edge.service import Service as EdgeService
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+import time
+
 from bs4 import BeautifulSoup
-from answer_bot import quick_apply
-from browser import create_edge_driver, login_naukri
+from selenium.common.exceptions import WebDriverException
 
-# ------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------
-load_dotenv()
+from . import config
+from .apply import apply_to_jobs
+from .browser import create_edge_driver, login_naukri
+from .filters import build_filter_urls
+from .jobapi import fetch_filter_job_links
+from .results import RESULTS_CSV, load_history, save_results
 
-# --- Naukri Credentials ---
-NAUKRI_EMAIL = os.getenv('NAUKRI_EMAIL', '')
-NAUKRI_PASSWORD = os.getenv('NAUKRI_PASSWORD', '')
-
-# --- Personal Details ---
-FIRSTNAME = os.getenv('FIRSTNAME', '')
-LASTNAME = os.getenv('LASTNAME', '')
-
-# --- Job Search ---
-KEYWORDS = [kw.strip() for kw in os.getenv('KEYWORDS', '').split(',') if kw.strip()]
-LOCATION = os.getenv('LOCATION', '').strip()
-
-# --- Limits ---
-MAX_APPLICATIONS = int(os.getenv('MAX_APPLICATIONS', '50'))
-PAGES_PER_KEYWORD = int(os.getenv('PAGES_PER_KEYWORD', '2'))
-
-# ------------------------------------------------------------
-# Logging Setup
-# ------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
 logger = logging.getLogger(__name__)
 
+NAUKRI_EMAIL = config.get('NAUKRI_EMAIL')
+NAUKRI_PASSWORD = config.get('NAUKRI_PASSWORD')
+FIRSTNAME = config.get('FIRSTNAME')
+LASTNAME = config.get('LASTNAME')
+KEYWORDS = [kw.strip() for kw in config.get('KEYWORDS').split(',') if kw.strip()]
+LOCATION = config.get('LOCATION')
+MAX_APPLICATIONS = config.get_int('MAX_APPLICATIONS')
+PAGES_PER_KEYWORD = config.get_int('PAGES_PER_KEYWORD')
+FILTER_URL = config.get('FILTER_URL')
+FILTER_DROP_PARAMS = [p.strip() for p in config.get('FILTER_DROP_PARAMS').split(',') if p.strip()]
 
-def validate_config():
+
+def validate_config(need_keywords=True):
     """Check that required configuration values are set."""
     errors = []
     if not NAUKRI_EMAIL:
         errors.append("NAUKRI_EMAIL is not set in .env")
     if not NAUKRI_PASSWORD:
         errors.append("NAUKRI_PASSWORD is not set in .env")
-    if not KEYWORDS:
+    if need_keywords and not KEYWORDS:
         errors.append("KEYWORDS is not set in .env (comma-separated job roles)")
     if not FIRSTNAME:
         errors.append("FIRSTNAME is not set in .env")
@@ -227,109 +191,80 @@ def collect_all_jobs_parallel(driver, search_urls):
     return unique_links
 
 
-def apply_to_jobs(driver, job_links):
-    """
-    Visit each job link and Quick-apply, answering any screening questions
-    (see answer_bot.py). Returns (applied_count, failed_count, applied_list).
-    """
-    applied = 0
-    failed = 0
-    applied_list = {'passed': [], 'failed': []}
+def run():
+    """Entry point for keyword-search mode."""
+    if not validate_config():
+        return
+    logger.info(f"Keywords: {KEYWORDS}")
+    logger.info(f"Location: {LOCATION or 'Anywhere'}")
+    logger.info(f"Pages per keyword: {PAGES_PER_KEYWORD}")
+    search_urls = build_search_urls()
+    logger.info(f"Total search pages to open: {len(search_urls)}")
 
-    logger.info("=" * 50)
-    logger.info(f"Starting job applications (max: {MAX_APPLICATIONS})...")
-    logger.info("=" * 50)
-
-    for i, link in enumerate(job_links, 1):
-        if applied >= MAX_APPLICATIONS:
-            logger.info(f"Reached max application limit ({MAX_APPLICATIONS}). Stopping.")
-            break
-
-        logger.info(f"[{i}/{len(job_links)}] Visiting job: {link}")
-        try:
-            driver.get(link)
-            time.sleep(4)
-            status = quick_apply(driver, link)
-        except WebDriverException as e:
-            logger.warning(f"  ✗ Browser error: {e}")
-            status = 'failed'
-
-        if status == 'applied':
-            applied += 1
-            applied_list['passed'].append(link)
-            logger.info(f"  ✓ Applied! Total: {applied}")
-        elif status == 'quota':
-            logger.info("Daily quota expired. Stopping.")
-            break
-        else:
-            failed += 1
-            applied_list['failed'].append(link)
-            reason = {
-                'already': 'already applied',
-                'external': 'external company-site application (skipped)',
-                'unanswered': 'unanswered question(s) logged to application_answers.csv',
-            }.get(status, 'could not complete application')
-            logger.warning(f"  ✗ Skipped: {reason}")
-
-    return applied, failed, applied_list
+    # Collected BEFORE logging in: the logged-in search page renders no job links
+    _run_pipeline(lambda driver: collect_all_jobs_parallel(driver, search_urls),
+                  "Check your keywords and location.")
 
 
-def save_results(applied_list):
-    """Save applied/failed links to CSV."""
-    csv_file = "naukriapplied.csv"
-    final_dict = {k: pd.Series(v) for k, v in applied_list.items()}
-    df = pd.DataFrame.from_dict(final_dict)
-    df.to_csv(csv_file, index=False)
-    logger.info(f"Results saved to {csv_file}")
+def run_filter():
+    """Entry point for filter mode: read the jobs of FILTER_URL via the search API and apply."""
+    if not validate_config(need_keywords=False):
+        return
+    if not FILTER_URL:
+        logger.error("FILTER_URL is not set in .env (paste a Naukri search URL with your filters)")
+        return
+    try:
+        page_url = build_filter_urls(FILTER_URL, 1, FILTER_DROP_PARAMS)[0][1]
+    except ValueError as e:
+        logger.error(str(e))
+        return
+    logger.info(f"Filter URL: {page_url}")
+
+    def collect(driver):
+        login_naukri(driver)  # the logged-in view is what the API returns
+        return fetch_filter_job_links(driver, page_url)
+
+    _run_pipeline(collect, "Check FILTER_URL in .env.", logged_in=True, capture_network=True)
 
 
-def main():
-    """Main entry point for the bot."""
+def _run_pipeline(collect, empty_hint, logged_in=False, capture_network=False):
+    """collect(driver) -> job links; then skip settled jobs, log in (unless already) and apply."""
     logger.info("=" * 50)
     logger.info("Naukri Auto-Apply Bot (Edge Edition - 2026 Update)")
     logger.info("=" * 50)
-
-    if not validate_config():
-        return
-
-    logger.info(f"Keywords: {KEYWORDS}")
-    logger.info(f"Location: {LOCATION or 'Anywhere'}")
     logger.info(f"Max applications: {MAX_APPLICATIONS}")
-    logger.info(f"Pages per keyword: {PAGES_PER_KEYWORD}")
 
     driver = None
     try:
-        # Initialize browser
-        driver = create_edge_driver()
+        driver = create_edge_driver(capture_network=capture_network)
 
-        # Build all search URLs
-        search_urls = build_search_urls()
-        logger.info(f"Total search pages to open: {len(search_urls)}")
-
-        # Collect all job links in parallel (multi-tab) BEFORE logging in:
-        # the logged-in search page uses a new card layout without links.
-        job_links = collect_all_jobs_parallel(driver, search_urls)
-
+        job_links = collect(driver)
         if not job_links:
-            logger.warning("No job links found. Check your keywords and location.")
+            logger.warning(f"No job links found. {empty_hint}")
             return
 
-        # Login, then apply
-        login_naukri(driver)
+        # Drop jobs settled in earlier runs (applied / already applied / external site)
+        done = load_history()
+        fresh = [link for link in job_links if link not in done]
+        logger.info(f"Skipping {len(job_links) - len(fresh)} jobs from earlier runs; "
+                    f"{len(fresh)} new to process")
+        job_links = fresh
+        if not job_links:
+            logger.info("Nothing new to apply to.")
+            return
 
-        # Apply to jobs
-        applied, failed, applied_list = apply_to_jobs(driver, job_links)
+        if not logged_in:
+            login_naukri(driver)
 
-        # Save results
+        applied, failed, applied_list = apply_to_jobs(driver, job_links, MAX_APPLICATIONS)
         save_results(applied_list)
 
-        # Summary
         logger.info("=" * 50)
         logger.info("APPLICATION SUMMARY")
         logger.info(f"  Successfully applied: {applied}")
         logger.info(f"  Failed/Skipped:      {failed}")
         logger.info(f"  Total processed:     {applied + failed}")
-        logger.info(f"  Results saved to:    naukriapplied.csv")
+        logger.info(f"  Results saved to:    {RESULTS_CSV}")
         logger.info("=" * 50)
 
     except Exception as e:
@@ -341,7 +276,3 @@ def main():
                 logger.info("Browser closed.")
             except Exception:
                 pass
-
-
-if __name__ == "__main__":
-    main()

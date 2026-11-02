@@ -1,0 +1,15 @@
+YOUR NAME
+Role | City | email | phone
+
+SUMMARY
+One or two lines about your experience.
+
+EXPERIENCE
+Company - Title (Mon YYYY - Present)
+- What you built / used (tools, years)
+
+SKILLS
+Python, Selenium, ...
+
+EDUCATION
+Degree, College (YYYY)
