@@ -1,6 +1,7 @@
 """Apply to jobs: Quick-apply orchestration plus the per-run loop."""
 import logging
 import time
+from urllib.parse import urlsplit
 
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, WebDriverException
 from selenium.webdriver.common.by import By
@@ -12,30 +13,48 @@ from .results import record_history
 logger = logging.getLogger(__name__)
 
 
-QUICK_APPLY_XPATH = "//button[.//span[normalize-space()='Quick apply'] or normalize-space()='Quick apply']"
-
-
+# Pro accounts show "Quick apply"; free accounts show a plain "Apply" button (#apply-button)
+QUICK_APPLY_XPATH = ("//button[.//span[normalize-space()='Quick apply'] or normalize-space()='Quick apply']"
+                     " | //button[@id='apply-button']")
 COMPANY_SITE_XPATH = "//button[contains(normalize-space(.),'Apply on company site')]"
+# Free accounts show an "Applied" label (no button) once you have applied
+ALREADY_APPLIED_XPATH = "//*[@id='already-applied']"
 
 
 def _path(url):
     return url.split("?")[0].rstrip("/")
 
 
+def _already_applied(driver):
+    return any(e.is_displayed() for e in driver.find_elements(By.XPATH, ALREADY_APPLIED_XPATH))
+
+
+def _close_extra_tabs(driver, keep):
+    """Close every tab except `keep` (an Apply that opens the company site in a new tab)."""
+    for handle in driver.window_handles:
+        if handle != keep:
+            driver.switch_to.window(handle)
+            driver.close()
+    driver.switch_to.window(keep)
+
+
 def quick_apply(driver, link, timeout=60):
     """
-    Click Quick apply on an already-loaded job page and answer any questions.
+    Click Quick apply / Apply on an already-loaded job page and answer any questions.
     Returns one of: 'applied', 'already', 'external', 'quota', 'unanswered', 'failed'.
     """
     if driver.find_elements(By.XPATH, "//*[text()='Your daily quota has been expired.']"):
         return "quota"
 
+    if _already_applied(driver):
+        return "already"
     buttons = driver.find_elements(By.XPATH, QUICK_APPLY_XPATH)
     if not buttons:
         return "external" if driver.find_elements(By.XPATH, COMPANY_SITE_XPATH) else "failed"
     if not buttons[0].is_enabled():
         return "already"  # button is disabled once applied
 
+    main_tab = driver.current_window_handle
     driver.execute_script("arguments[0].click()", buttons[0])
     clicked_at = time.time()
     saved = load_saved_answers()
@@ -46,14 +65,19 @@ def quick_apply(driver, link, timeout=60):
     while time.time() < deadline:
         time.sleep(1.5)
         try:
+            if len(driver.window_handles) > 1:
+                _close_extra_tabs(driver, main_tab)
+                return "external"  # Apply opened the company's own site in a new tab
             if _path(driver.current_url) != _path(link):
-                return "applied"  # Naukri redirects after a direct quick apply
+                # Naukri redirects after a direct apply; landing on another site means external
+                same_site = urlsplit(driver.current_url).netloc == urlsplit(link).netloc
+                return "applied" if same_site else "external"
             # The Quick apply button is ALSO disabled while the questionnaire drawer is open,
             # so only treat "disabled" as success once the drawer is gone (and give it time to open).
             btn = driver.find_elements(By.XPATH, QUICK_APPLY_XPATH)
             if time.time() - clicked_at > 5 and not chatbot.chat_open(driver):
                 # drawer closed: applied if the button is disabled/gone or Naukri shows the post-apply page
-                if not btn or not btn[0].is_enabled() or driver.execute_script(
+                if not btn or not btn[0].is_enabled() or _already_applied(driver) or driver.execute_script(
                         "return /Similar opportunities|applied successfully/i.test(document.body.innerText)"):
                     return "applied"
             if driver.find_elements(By.XPATH, "//*[text()='Your daily quota has been expired.']"):

@@ -1,132 +1,104 @@
-# Naukri-Autoapply-Bot
+# Naukri Auto-Apply Agent
 
-> Automation that applies to jobs on Naukri.com automatically for faster job hunting. Uses **Selenium** for browser automation and **BeautifulSoup** for parsing job listings.
+Applies to jobs on Naukri.com for you. It finds jobs, applies, and answers the recruiter's screening questions from your profile, your saved answers, and (optionally) an LLM. Built with **Selenium** (Microsoft Edge) and **BeautifulSoup**. See [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) for the architecture.
 
-## 📋 Features
+## Features
 
-- ✅ Automatically logs in to Naukri.com
-- ✅ **Multi-tab parallel search** — Opens each keyword category in its own browser tab simultaneously
-- ✅ Searches for jobs by keywords and location (updated for 2026 Naukri redesign)
-- ✅ Visits job listings and clicks "Apply" / "Apply on company site"
-- ✅ Handles custom first/last name fields and "Submit and Apply" flow
-- ✅ Detects daily application quota limits
-- ✅ Saves results (passed/failed) to a CSV file
-- ✅ Uses **Microsoft Edge** browser
-- ✅ Uses `webdriver-manager` for automatic driver download (no manual setup!)
+- **Three modes**: keyword search, your own filtered search URL, or the recommended-jobs page
+- **Pro and free accounts**: handles both the "Quick apply" button (Pro) and the plain "Apply" button (free)
+- **Screening questions answered automatically**: saved answers, then profile rules, then an LLM (see below)
+- **Learns**: every answer used is saved to a CSV you can edit; your edits always win
+- **Skips settled jobs**: jobs already applied to, already applied, or external-site are remembered and not re-opened on later runs
+- **Daily quota detection**, external-site jobs skipped, results saved to CSV
+- **All settings in `.env`**, nothing hardcoded in the Python files
 
-## 🚀 How Multi-Tab Parallel Search Works
+## The three modes
 
-Instead of processing each keyword one-by-one (slow), the bot **opens every keyword search page in its own browser tab simultaneously**:
+| Command | What it does |
+|---|---|
+| `python cli.py search` | Opens one browser tab per keyword and page (`KEYWORDS`, `LOCATION`, `PAGES_PER_KEYWORD`), collects job links, de-duplicates, then applies |
+| `python cli.py filter` | You paste a Naukri search URL with your filters applied into `FILTER_URL`. The bot logs in and reads every result page from Naukri's search API, so it applies to the same jobs your logged-in browser shows |
+| `python cli.py recommended` | Works through Naukri's recommended-jobs page in batches (`MAX_SELECT`), using its own chatbot handling |
 
-```
-Keyword: "python developer"  → Tab 1 (Page 1) + Tab 2 (Page 2)
-Keyword: "data analyst"     → Tab 3 (Page 1) + Tab 4 (Page 2)
-Keyword: "software engineer" → Tab 5 (Page 1) + Tab 6 (Page 2)
-...all open at the same time!
-```
+## How screening questions are answered
 
-**Benefits:**
-- ⚡ **Much faster** — all keyword searches load in parallel instead of waiting sequentially
-- 📊 **More jobs found** — each keyword gets equal attention
-- 🔄 **Smart deduplication** — duplicate job links across keywords are automatically removed before applying
+For each question the bot tries these in order and uses the first answer found:
 
-## 🚀 Quick Start
+1. **Saved answers**: `data/application_answers.csv` (exact match, or at least `SAVED_ANSWER_CUTOFF` similar). Anything you edit there always wins.
+2. **Profile rules**: your `.env` profile (name, email, phone, CTC, notice period, ...) and `SKILL_YEARS` for "years of experience in X".
+3. **LLM fallback**: the `claude` CLI, using `config/resume.txt` and your profile. It needs the CLI installed and logged in. Without it, unknown questions are saved as `unanswered` with an empty answer and the job is skipped; fill in the answer in the CSV and it is used on the next run.
+
+Radio buttons, dropdowns and checkboxes are matched to the options by exact text, yes/no, number ranges (for example "3-5 years"), then fuzzy match (`OPTION_MATCH_CUTOFF`).
+
+## Quick start
 
 ### Prerequisites
-- **Python 3.7+** installed on your system
-- **Microsoft Edge** browser installed
-- A valid **Naukri.com** account
+- **Python 3.8+**
+- **Microsoft Edge**
+- A **Naukri.com** account (Pro or free)
+- Optional: the **`claude` CLI** for the LLM fallback
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/lordzohar/Naukri-autoapply-bot.git
-cd Naukri-autoapply-bot
-```
-
-### 2. Install dependencies
-
-It's recommended to use a virtual environment:
+### 1. Install
 
 ```bash
-# Create a virtual environment (optional but recommended)
+git clone https://github.com/nitiinsatwik2911/naukri-auto-agent.git
+cd naukri-auto-agent
+
 python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS/Linux
 
-# Activate it:
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install required packages
 pip install -r requirements.txt
 ```
 
-### 3. Configure your credentials
+### 2. Configure
 
 ```bash
-# Copy the example environment file
 copy .env.example .env
+copy config\resume.example.txt config\resume.txt
 ```
 
-Then edit **`.env`** (⚠️ NEVER commit this file) with your details:
+Edit **`.env`** (never commit it) and `config/resume.txt`. `.env.example` documents every setting, grouped by purpose:
 
-```ini
-# Your Naukri.com login credentials
-NAUKRI_EMAIL=your_email@example.com
-NAUKRI_PASSWORD=your_password
+1. Naukri account
+2. Run modes (keyword search, filter URL, recommended)
+3. Files and folders (`DATA_DIR`, `RESUME_FILE`)
+4. Browser (`EDGE_DRIVER_PATH`)
+5. Your profile and `SKILL_YEARS`
+6. Answer-matching cut-offs
+7. LLM fallback
 
-# Your personal details
-FIRSTNAME=YourFirstName
-LASTNAME=YourLastName
+Numeric settings are required: if one is missing the bot stops and names it.
 
-# Job search keywords (comma-separated)
-KEYWORDS=python developer, data analyst, software engineer
-
-# Location (leave empty for all locations, or specify a city like "bangalore", "mumbai", "remote")
-LOCATION=bangalore
-
-# Number of search result pages to scrape per keyword (default: 2)
-PAGES_PER_KEYWORD=2
-
-# Maximum applications per run (Naukri allows ~100/day)
-MAX_APPLICATIONS=50
-```
-
-### 4. Run the bot
+### 3. Run
 
 ```bash
 python cli.py search
+python cli.py filter
+python cli.py recommended
 ```
 
-> **Note:** The script uses `webdriver-manager` to automatically download the correct EdgeDriver. No manual driver setup needed!
+If `EDGE_DRIVER_PATH` is empty, `webdriver-manager` downloads the driver; if that fails, Selenium Manager or your PATH is used.
 
-### 5. Check results
+### 4. Check results
 
-After running, results are saved to **`naukriapplied.csv`** with two columns:
-- `passed` — URLs of jobs successfully applied to
-- `failed` — URLs where the apply attempt failed
+Everything the bot writes goes to the `data/` folder (set by `DATA_DIR`):
 
-## 🔧 2026 Naukri.com Update
+| File | Contents |
+|---|---|
+| `application_answers.csv` | Every screening answer used and its source (`saved`, `rule`, `llm`, `unanswered`). Edit it to correct answers. |
+| `naukriapplied.csv` | `passed` and `failed` job links of the **last run** (overwritten each run) |
+| `job_history.csv` | Outcome of every job ever visited (`applied`, `already`, `external`, `failed`, `unanswered`). The first three are skipped on later runs. |
+| `debug_pages/` | HTML and screenshots saved when the bot gets stuck |
 
-The bot has been updated to work with Naukri.com's 2026 redesign. Key changes:
-
-| Old (original script) | New (updated) |
-|----------------------|---------------|
-| Job cards: `article.jobTuple.bgWhite.br4.mb-8` | Job cards: `div.srp-jobtuple-wrapper > div.cust-job-tuple` |
-| Title links: `a.title.fw500.ellipsis` | Title links: `a.title` (inside `h2`) |
-| Search URL: `/{keyword}-{page}` | Search URL: `/{keyword}-jobs` or `/{keyword}-jobs-in-{location}` |
-| Apply button: `//*[text()='Apply']` | Apply button: `//button[contains(text(),'Apply on company site')]` |
-| Page structure: `article` tags | Page structure: React/Next.js app using `div` with hashed CSS classes |
-
-## 📁 Project Structure
+## Project structure
 
 ```
 naukri-auto-agent/
 ├── cli.py                     # python cli.py search | filter | recommended
 ├── requirements.txt
 ├── pytest.ini
-├── .env.example               # All settings, with example values (copy to .env)
+├── .env.example               # Every setting, with example values (copy to .env)
 ├── SYSTEM_DESIGN.md           # Architecture
 ├── config/
 │   ├── resume.example.txt     # Copy to config/resume.txt (gitignored)
@@ -134,47 +106,53 @@ naukri-auto-agent/
 ├── src/naukri_agent/
 │   ├── config.py              # Only place that reads .env (+ profile, skill years)
 │   ├── browser.py             # Edge driver setup + Naukri login
-│   ├── search.py              # Keyword + filter modes: tabs, link collection, run()
+│   ├── search.py              # Keyword + filter modes: link collection and run loop
 │   ├── filters.py             # FILTER_URL cleanup + search-API helpers (pure, tested)
 │   ├── jobapi.py              # Filter mode: replays the page's search API call after login
 │   ├── recommended.py         # Recommended-feed mode
-│   ├── apply.py               # quick_apply + per-run apply loop
+│   ├── apply.py               # Quick apply / Apply flow + per-run apply loop
 │   ├── chatbot.py             # Screening-question DOM handling (Selenium)
-│   ├── results.py             # naukriapplied.csv + job_history.csv (skip settled jobs)
+│   ├── results.py             # naukriapplied.csv + job_history.csv
 │   └── answers/               # No browser needed (unit-tested)
 │       ├── store.py           # application_answers.csv
 │       ├── rules.py           # Profile-based rules
 │       ├── llm.py             # claude CLI fallback
 │       ├── options.py         # Match answers to radio/select options
 │       └── resolver.py        # saved -> rule -> llm
-├── tests/                     # test_rules, test_options, test_resolver
-├── data/                      # Generated files (gitignored, folder set by DATA_DIR)
-│   ├── application_answers.csv
-│   ├── naukriapplied.csv
-│   ├── job_history.csv
-│   └── debug_pages/
+├── tests/                     # test_rules, test_options, test_resolver, test_filters
+├── data/                      # Generated files (gitignored)
 ├── drivers/                   # Optional local msedgedriver (gitignored)
 └── Naukri autoapply jobs.ipynb  # Legacy notebook
 ```
 
-## 🔧 Troubleshooting
+## Tests
+
+```bash
+pip install pytest
+pytest
+```
+
+The tests need no browser or network and set their own environment.
+
+## Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
-| `ModuleNotFoundError` | Run `pip install -r requirements.txt` |
-| Browser driver not found | `webdriver-manager` handles this automatically. Ensure you're connected to the internet on first run. |
-| Login failed | Double-check your `NAUKRI_EMAIL` and `NAUKRI_PASSWORD` in `.env` |
-| No jobs found | Try broader keywords or remove the location filter |
-| "Daily quota expired" | Naukri limits daily applications. Try again the next day. |
-| Script too fast/slow | Adjust the `time.sleep()` values in the script if needed |
-| "Apply on company site" opens external site | This is expected — many Naukri jobs now redirect to company career pages |
+|---|---|
+| `X is not set in .env` | Add the named setting; `.env.example` lists them all |
+| `ModuleNotFoundError` | Run `pip install -r requirements.txt` in your virtual environment |
+| Browser driver problems | Set `EDGE_DRIVER_PATH`, or leave it empty so `webdriver-manager` downloads one |
+| Login failed | Check `NAUKRI_EMAIL` and `NAUKRI_PASSWORD` |
+| Most jobs "Skipped: external company-site" | Normal: many Naukri jobs apply on the company's own site, which the bot skips |
+| Many jobs "could not complete application" | Check `data/debug_pages/` for the page the bot got stuck on |
+| Questions logged as `unanswered` | Fill in the `answer` column in `data/application_answers.csv`; it is used next run. Or install and log in to the `claude` CLI |
+| Filter mode finds few jobs | Your filters match few jobs. Loosen them (for example remove `jobAge`) in `FILTER_URL` |
+| `Search API call ... not seen on the page` | Naukri changed its API. Update `FILTER_API_PATH` / `FILTER_API_HEADERS` in `.env` |
+| `Daily quota expired` | Naukri limits daily applications; try again tomorrow |
+| Lines like `fallback_task_provider.cc ... ERROR` | Harmless Edge/Chromium warnings; ignore them |
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-- Use this bot responsibly and in accordance with Naukri.com's Terms of Service
-- The bot mimics human behavior but excessive automation may lead to account restrictions
+- Use this bot in line with Naukri.com's Terms of Service
+- Heavy automation can lead to account restrictions, so keep `MAX_APPLICATIONS` modest
+- Your `.env`, resume and `data/` hold personal information and are gitignored; do not commit them
 - This project is for educational purposes
-
-## 🔗 Original Repository
-
-[github.com/lordzohar/Naukri-autoapply-bot](https://github.com/lordzohar/Naukri-autoapply-bot)
