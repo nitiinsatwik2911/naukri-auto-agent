@@ -26,7 +26,9 @@ For each question the bot tries these in order and uses the first answer found:
 
 1. **Saved answers**: `data/application_answers.csv` (exact match, or at least `SAVED_ANSWER_CUTOFF` similar). Anything you edit there always wins.
 2. **Profile rules**: your `.env` profile (name, email, phone, CTC, notice period, ...) and `SKILL_YEARS` for "years of experience in X".
-3. **LLM fallback**: the `claude` CLI, using `config/resume.txt` and your profile. It needs the CLI installed and logged in. Without it, unknown questions are saved as `unanswered` with an empty answer and the job is skipped; fill in the answer in the CSV and it is used on the next run.
+3. **LLM fallback**: an AI command-line tool, using `config/resume.txt` and your profile. Set `LLM_PROVIDER` in `.env` to `claude`, `copilot`, or both (`claude,copilot`, tried in that order). The tool must be installed and logged in; if it is missing, not logged in, or `LLM_PROVIDER` is empty, the bot skips it and saves the question as `unanswered` with an empty answer. Fill in the answer in the CSV and it is used on the next run.
+
+   Each provider's command is a line in `.env` (`LLM_CLAUDE_COMMAND`, `LLM_COPILOT_COMMAND`), so you can change flags or add another tool (`LLM_<NAME>_COMMAND`) without touching the code. A command containing `{prompt}` receives the question as an argument; otherwise it is sent on stdin. Check the flags with `claude --help` / `copilot --help`.
 
 Radio buttons, dropdowns and checkboxes are matched to the options by exact text, yes/no, number ranges (for example "3-5 years"), then fuzzy match (`OPTION_MATCH_CUTOFF`).
 
@@ -36,7 +38,7 @@ Radio buttons, dropdowns and checkboxes are matched to the options by exact text
 - **Python 3.8+**
 - **Microsoft Edge**
 - A **Naukri.com** account (Pro or free)
-- Optional: the **`claude` CLI** for the LLM fallback
+- Optional, for the LLM fallback: the **`claude` CLI** or the **GitHub Copilot CLI** (`copilot`), installed and logged in
 
 ### 1. Install
 
@@ -66,7 +68,7 @@ Edit **`.env`** (never commit it) and `config/resume.txt`. `.env.example` docume
 4. Browser (`EDGE_DRIVER_PATH`)
 5. Your profile and `SKILL_YEARS`
 6. Answer-matching cut-offs
-7. LLM fallback
+7. LLM fallback (`LLM_PROVIDER`, per-provider commands)
 
 Numeric settings are required: if one is missing the bot stops and names it.
 
@@ -116,10 +118,10 @@ naukri-auto-agent/
 │   └── answers/               # No browser needed (unit-tested)
 │       ├── store.py           # application_answers.csv
 │       ├── rules.py           # Profile-based rules
-│       ├── llm.py             # claude CLI fallback
+│       ├── llm.py             # LLM fallback: claude / copilot CLI, set in .env
 │       ├── options.py         # Match answers to radio/select options
 │       └── resolver.py        # saved -> rule -> llm
-├── tests/                     # test_rules, test_options, test_resolver, test_filters
+├── tests/                     # test_rules, test_options, test_resolver, test_filters, test_llm
 ├── data/                      # Generated files (gitignored)
 ├── drivers/                   # Optional local msedgedriver (gitignored)
 └── Naukri autoapply jobs.ipynb  # Legacy notebook
@@ -144,7 +146,8 @@ The tests need no browser or network and set their own environment.
 | Login failed | Check `NAUKRI_EMAIL` and `NAUKRI_PASSWORD` |
 | Most jobs "Skipped: external company-site" | Normal: many Naukri jobs apply on the company's own site, which the bot skips |
 | Many jobs "could not complete application" | Check `data/debug_pages/` for the page the bot got stuck on |
-| Questions logged as `unanswered` | Fill in the `answer` column in `data/application_answers.csv`; it is used next run. Or install and log in to the `claude` CLI |
+| `LLM 'x': 'x' is not installed or not on PATH` | Install that CLI, or change `LLM_PROVIDER` / `LLM_<NAME>_COMMAND` in `.env` |
+| Questions logged as `unanswered` | Fill in the `answer` column in `data/application_answers.csv`; it is used next run. Or set `LLM_PROVIDER` and log in to that CLI (`claude` or `copilot`) |
 | Filter mode finds few jobs | Your filters match few jobs. Loosen them (for example remove `jobAge`) in `FILTER_URL` |
 | `Search API call ... not seen on the page` | Naukri changed its API. Update `FILTER_API_PATH` / `FILTER_API_HEADERS` in `.env` |
 | `Daily quota expired` | Naukri limits daily applications; try again tomorrow |
