@@ -20,6 +20,11 @@ def _required(name):
     return value
 
 
+def get_bool(name):
+    """True for 1/true/yes/on (any case); anything else, including unset, is False."""
+    return get(name).lower() in ("1", "true", "yes", "on")
+
+
 def get_int(name):
     return int(_required(name))
 

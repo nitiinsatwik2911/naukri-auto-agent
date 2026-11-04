@@ -169,11 +169,10 @@ naukri-auto-agent/
     └── test_resolver.py
 ```
 
-**Known gap:** `recommended.py` still has its own chatbot handlers and CSV reader (moved as-is, not merged into `chatbot.py` / `answers/`), because merging changes its matching behaviour and can only be validated against the live site.
-
 **Why this split:** everything that doesn't need a browser (rules, option matching, resolver, store) becomes unit-testable. Only `browser.py`, `chatbot.py` and `search.py` touch Selenium, so a Naukri DOM change is confined to those files.
 
 ## 10. Status of Recommended Steps
 
 Done: `.gitignore` fixed; profile, skill years and every tunable moved to `.env` (read only by `config.py`); shared browser/login module; cross-run dedupe; `data/` folder; package split; unit tests for rules, options and resolver; README refreshed.
-Open: merge `recommended.py` onto `chatbot.py` / `answers/`; purge secrets from git history; expire stale LLM answers.
+Also done: recommended mode rewritten on Naukri's API with a tab menu, so every mode now shares `pipeline.py`, `apply.py`, `chatbot.py` and `answers/`; early-access `interested` mode; pluggable LLM providers.
+Open: purge secrets from git history; expire stale LLM answers.

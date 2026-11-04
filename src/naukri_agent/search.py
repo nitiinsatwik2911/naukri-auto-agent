@@ -6,11 +6,10 @@ from bs4 import BeautifulSoup
 from selenium.common.exceptions import WebDriverException
 
 from . import config
-from .apply import apply_to_jobs
-from .browser import create_edge_driver, login_naukri
+from .browser import login_naukri
 from .filters import build_filter_urls
 from .jobapi import fetch_filter_job_links
-from .results import RESULTS_CSV, load_history, save_results
+from .pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,6 @@ FIRSTNAME = config.get('FIRSTNAME')
 LASTNAME = config.get('LASTNAME')
 KEYWORDS = [kw.strip() for kw in config.get('KEYWORDS').split(',') if kw.strip()]
 LOCATION = config.get('LOCATION')
-MAX_APPLICATIONS = config.get_int('MAX_APPLICATIONS')
 PAGES_PER_KEYWORD = config.get_int('PAGES_PER_KEYWORD')
 FILTER_URL = config.get('FILTER_URL')
 FILTER_DROP_PARAMS = [p.strip() for p in config.get('FILTER_DROP_PARAMS').split(',') if p.strip()]
@@ -202,7 +200,7 @@ def run():
     logger.info(f"Total search pages to open: {len(search_urls)}")
 
     # Collected BEFORE logging in: the logged-in search page renders no job links
-    _run_pipeline(lambda driver: collect_all_jobs_parallel(driver, search_urls),
+    run_pipeline(lambda driver: collect_all_jobs_parallel(driver, search_urls),
                   "Check your keywords and location.")
 
 
@@ -224,55 +222,4 @@ def run_filter():
         login_naukri(driver)  # the logged-in view is what the API returns
         return fetch_filter_job_links(driver, page_url)
 
-    _run_pipeline(collect, "Check FILTER_URL in .env.", logged_in=True, capture_network=True)
-
-
-def _run_pipeline(collect, empty_hint, logged_in=False, capture_network=False):
-    """collect(driver) -> job links; then skip settled jobs, log in (unless already) and apply."""
-    logger.info("=" * 50)
-    logger.info("Naukri Auto-Apply Bot (Edge Edition - 2026 Update)")
-    logger.info("=" * 50)
-    logger.info(f"Max applications: {MAX_APPLICATIONS}")
-
-    driver = None
-    try:
-        driver = create_edge_driver(capture_network=capture_network)
-
-        job_links = collect(driver)
-        if not job_links:
-            logger.warning(f"No job links found. {empty_hint}")
-            return
-
-        # Drop jobs settled in earlier runs (applied / already applied / external site)
-        done = load_history()
-        fresh = [link for link in job_links if link not in done]
-        logger.info(f"Skipping {len(job_links) - len(fresh)} jobs from earlier runs; "
-                    f"{len(fresh)} new to process")
-        job_links = fresh
-        if not job_links:
-            logger.info("Nothing new to apply to.")
-            return
-
-        if not logged_in:
-            login_naukri(driver)
-
-        applied, failed, applied_list = apply_to_jobs(driver, job_links, MAX_APPLICATIONS)
-        save_results(applied_list)
-
-        logger.info("=" * 50)
-        logger.info("APPLICATION SUMMARY")
-        logger.info(f"  Successfully applied: {applied}")
-        logger.info(f"  Failed/Skipped:      {failed}")
-        logger.info(f"  Total processed:     {applied + failed}")
-        logger.info(f"  Results saved to:    {RESULTS_CSV}")
-        logger.info("=" * 50)
-
-    except Exception as e:
-        logger.exception(f"An unexpected error occurred: {e}")
-    finally:
-        if driver:
-            try:
-                driver.quit()
-                logger.info("Browser closed.")
-            except Exception:
-                pass
+    run_pipeline(collect, "Check FILTER_URL in .env.", logged_in=True, capture_network=True)

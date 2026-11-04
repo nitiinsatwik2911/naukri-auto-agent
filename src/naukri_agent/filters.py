@@ -29,16 +29,20 @@ def build_filter_urls(filter_url, pages, drop_params):
 # ---------------------------------------------------------------------------
 # Search-API helpers (pure): the page's own jobapi request is replayed per page
 # ---------------------------------------------------------------------------
-def find_search_request(log_entries, api_path):
-    """Return (url, headers) of the last network request to `api_path` in Chrome
-    performance-log entries, or None. Request header names are lower-cased."""
+def find_request(log_entries, api_path):
+    """Return the last network request to `api_path` found in Chrome performance-log entries as
+    {id, method, url, headers (names lower-cased), body, has_body}, or None.
+    `body` is the POST data when the log carries it; otherwise it is None (see has_body)."""
     found = None
     for entry in log_entries:
         message = json.loads(entry["message"])["message"]
         if message.get("method") == "Network.requestWillBeSent":
-            request = message["params"]["request"]
+            params = message["params"]
+            request = params["request"]
             if api_path in request["url"]:
-                found = (request["url"], {k.lower(): v for k, v in request["headers"].items()})
+                found = {"id": params["requestId"], "method": request["method"], "url": request["url"],
+                         "headers": {k.lower(): v for k, v in request["headers"].items()},
+                         "body": request.get("postData"), "has_body": bool(request.get("hasPostData"))}
     return found
 
 

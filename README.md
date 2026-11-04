@@ -4,7 +4,7 @@ Applies to jobs on Naukri.com for you. It finds jobs, applies, and answers the r
 
 ## Features
 
-- **Three modes**: keyword search, your own filtered search URL, or the recommended-jobs page
+- **Four modes**: keyword search, your own filtered search URL, Naukri's recommended jobs (you pick the tabs), and early-access "I'm interested"
 - **Pro and free accounts**: handles both the "Quick apply" button (Pro) and the plain "Apply" button (free)
 - **Screening questions answered automatically**: saved answers, then profile rules, then an LLM (see below)
 - **Learns**: every answer used is saved to a CSV you can edit; your edits always win
@@ -12,13 +12,14 @@ Applies to jobs on Naukri.com for you. It finds jobs, applies, and answers the r
 - **Daily quota detection**, external-site jobs skipped, results saved to CSV
 - **All settings in `.env`**, nothing hardcoded in the Python files
 
-## The three modes
+## The four modes
 
 | Command | What it does |
 |---|---|
 | `python cli.py search` | Opens one browser tab per keyword and page (`KEYWORDS`, `LOCATION`, `PAGES_PER_KEYWORD`), collects job links, de-duplicates, then applies |
 | `python cli.py filter` | You paste a Naukri search URL with your filters applied into `FILTER_URL`. The bot logs in and reads every result page from Naukri's search API, so it applies to the same jobs your logged-in browser shows |
-| `python cli.py recommended` | Works through Naukri's recommended-jobs page in batches (`MAX_SELECT`), using its own chatbot handling |
+| `python cli.py recommended` | Reads your recommendations from Naukri's API and shows the tabs (All, Top companies, Strong match, Actively reviewing, Salary growth) with how many jobs you can apply to in each. You pick one or more, for example `3` or `3,5`, or skip the question with `--tabs 3,5`. Jobs that apply on the company's site, jobs already applied to, and settled jobs are left out. It then applies with the same loop and answer engine as the other modes |
+| `python cli.py interested` | Opens each early-access "View opportunity" card and clicks "I'm interested" (`INTERESTED_MAX` cards). This shares your interest with the recruiter and is not an application |
 
 ## How screening questions are answered
 
@@ -63,7 +64,7 @@ copy config\resume.example.txt config\resume.txt
 Edit **`.env`** (never commit it) and `config/resume.txt`. `.env.example` documents every setting, grouped by purpose:
 
 1. Naukri account
-2. Run modes (keyword search, filter URL, recommended)
+2. Run modes (keyword search, filter URL, recommended tabs, early access)
 3. Files and folders (`DATA_DIR`, `RESUME_FILE`)
 4. Browser (`EDGE_DRIVER_PATH`)
 5. Your profile and `SKILL_YEARS`
@@ -77,7 +78,9 @@ Numeric settings are required: if one is missing the bot stops and names it.
 ```bash
 python cli.py search
 python cli.py filter
-python cli.py recommended
+python cli.py recommended            # asks which tabs
+python cli.py recommended --tabs 3,5
+python cli.py interested
 ```
 
 If `EDGE_DRIVER_PATH` is empty, `webdriver-manager` downloads the driver; if that fails, Selenium Manager or your PATH is used.
@@ -108,10 +111,13 @@ naukri-auto-agent/
 ├── src/naukri_agent/
 │   ├── config.py              # Only place that reads .env (+ profile, skill years)
 │   ├── browser.py             # Edge driver setup + Naukri login
-│   ├── search.py              # Keyword + filter modes: link collection and run loop
+│   ├── search.py              # Keyword + filter modes: link collection
 │   ├── filters.py             # FILTER_URL cleanup + search-API helpers (pure, tested)
 │   ├── jobapi.py              # Filter mode: replays the page's search API call after login
-│   ├── recommended.py         # Recommended-feed mode
+│   ├── recommended.py         # Recommended mode: tab menu + API (pure helpers tested)
+│   ├── interested.py          # Early-access "I'm interested" mode
+│   ├── netapi.py              # Capture + replay a logged-in page's API call (GET or POST)
+│   ├── pipeline.py            # Shared run loop: collect, skip settled, apply, summary
 │   ├── apply.py               # Quick apply / Apply flow + per-run apply loop
 │   ├── chatbot.py             # Screening-question DOM handling (Selenium)
 │   ├── results.py             # naukriapplied.csv + job_history.csv
@@ -121,7 +127,7 @@ naukri-auto-agent/
 │       ├── llm.py             # LLM fallback: claude / copilot CLI, set in .env
 │       ├── options.py         # Match answers to radio/select options
 │       └── resolver.py        # saved -> rule -> llm
-├── tests/                     # test_rules, test_options, test_resolver, test_filters, test_llm
+├── tests/                     # test_rules, test_options, test_resolver, test_filters, test_llm, test_recommended
 ├── data/                      # Generated files (gitignored)
 ├── drivers/                   # Optional local msedgedriver (gitignored)
 └── Naukri autoapply jobs.ipynb  # Legacy notebook
@@ -148,6 +154,8 @@ The tests need no browser or network and set their own environment.
 | Many jobs "could not complete application" | Check `data/debug_pages/` for the page the bot got stuck on |
 | `LLM 'x': 'x' is not installed or not on PATH` | Install that CLI, or change `LLM_PROVIDER` / `LLM_<NAME>_COMMAND` in `.env` |
 | Questions logged as `unanswered` | Fill in the `answer` column in `data/application_answers.csv`; it is used next run. Or set `LLM_PROVIDER` and log in to that CLI (`claude` or `copilot`) |
+| `Recommended` tab shows "listed without details, not usable" | Naukri lists those jobs in the tab but sends details for only some; the bot can only use the ones it has details for |
+| `python cli.py filter` opens the wrong page | `FILTER_URL` in `.env` must be a search URL (like `https://www.naukri.com/ai-engineer-jobs?...`), not the recommended page |
 | Filter mode finds few jobs | Your filters match few jobs. Loosen them (for example remove `jobAge`) in `FILTER_URL` |
 | `Search API call ... not seen on the page` | Naukri changed its API. Update `FILTER_API_PATH` / `FILTER_API_HEADERS` in `.env` |
 | `Daily quota expired` | Naukri limits daily applications; try again tomorrow |

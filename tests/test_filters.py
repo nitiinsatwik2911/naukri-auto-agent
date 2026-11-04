@@ -24,24 +24,25 @@ def test_invalid_url():
 # --- search-API helpers -------------------------------------------------------
 import json
 
-from naukri_agent.filters import find_search_request, job_links, pick_headers, with_page
+from naukri_agent.filters import find_request, job_links, pick_headers, with_page
 
 API = "https://www.naukri.com/jobapi/v3/search?noOfResults=20&keyword=ai%20engineer&pageNo=1&src=directSearch"
 
 
 def _entry(method, url, headers=None):
-    msg = {"message": {"method": method, "params": {"request": {"url": url, "headers": headers or {}}}}}
+    msg = {"message": {"method": method, "params": {"requestId": "r1", "request": {"url": url, "method": "GET", "headers": headers or {}}}}}
     return {"message": json.dumps(msg)}
 
 
-def test_find_search_request_takes_last_match():
+def test_find_request_takes_last_match():
     log = [_entry("Network.requestWillBeSent", "https://www.naukri.com/other"),
            _entry("Network.requestWillBeSent", API, {"AppId": "1", "x": "y"}),
            _entry("Network.responseReceived", API),
            _entry("Network.requestWillBeSent", API + "&z=1", {"AppId": "2"})]
-    url, headers = find_search_request(log, "/jobapi/v3/search")
-    assert url.endswith("&z=1") and headers == {"appid": "2"}
-    assert find_search_request(log[:1], "/jobapi/v3/search") is None
+    request = find_request(log, "/jobapi/v3/search")
+    assert request["url"].endswith("&z=1") and request["headers"] == {"appid": "2"}
+    assert request["method"] == "GET" and request["body"] is None and request["has_body"] is False
+    assert find_request(log[:1], "/jobapi/v3/search") is None
 
 
 def test_pick_headers_case_insensitive():
